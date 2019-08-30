@@ -24,7 +24,7 @@ def get_vacancies(url, headers, payload, records):
         yield from response.json()[records]
 
 
-def get_salary_info(site):
+def get_salary_info(site, languages):
     salary_info = {}
     for language in languages:
         payload = site.make_payload(language)
@@ -80,7 +80,7 @@ def make_table(data):
 if __name__ == "__main__":
     sites = [HeadHunter(), SuperJob()]
     for site in sites:
-        salary_info = get_salary_info(site)
+        salary_info = get_salary_info(site, languages)
         table = AsciiTable(make_table(salary_info))
         table.title = site.title
         print(table.table)
