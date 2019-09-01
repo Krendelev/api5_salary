@@ -3,7 +3,8 @@ import statistics
 import requests
 from terminaltables import AsciiTable
 
-from settings import HeadHunter, SuperJob, languages
+import settings
+from data_providers import HeadHunter, SuperJob
 
 
 def predict_rub_salary(salary_from, salary_to):
@@ -19,9 +20,13 @@ def get_vacancies(url, headers, payload, records):
     for page in itertools.count():
         payload.update({"page": page})
         response = requests.get(url, headers=headers, params=payload)
-        if not (response.ok and response.json()[records]):
+        # HeadHunter отвечает 400 при попытке получить более 2000 записей
+        if not response.ok and response.status_code != 400:
+            response.raise_for_status()
+        current_records = response.json()[records] if response.ok else None
+        if not current_records:
             break
-        yield from response.json()[records]
+        yield from current_records
 
 
 def get_salary_info(site, languages):
@@ -36,29 +41,22 @@ def get_salary_info(site, languages):
         vacancies = get_vacancies(site.url, site.headers, payload, records)
         salaries = (site.extract_salary(vacancy) for vacancy in vacancies)
 
-        salaries_proccessed = []
-        for salary in salaries:
-            salary_from, salary_to, currency = salary
-            if currency != site.currency_abbr:
-                continue
-            proccessed = predict_rub_salary(salary_from, salary_to)
-            if proccessed:
-                salaries_proccessed.append(proccessed)
-
-        if salaries_proccessed:
-            average_salary = int(statistics.mean(salaries_proccessed))
-        else:
-            average_salary = 0
-
-        salary_info.update(
-            {
-                language: {
-                    "vacancies_found": vacancies_count,
-                    "vacancies_processed": len(salaries_proccessed),
-                    "average_salary": average_salary,
-                }
-            }
+        predicted_salaries = (
+            predict_rub_salary(salary_from, salary_to)
+            for salary_from, salary_to, salary_currency in salaries
+            if salary_currency == site.ruble_abbr
         )
+        filtered_salaries = list(filter(None, predicted_salaries))
+
+        average_salary = (
+            int(statistics.mean(filtered_salaries)) if filtered_salaries else 0
+        )
+        salary_info[language] = {
+            "vacancies_found": vacancies_count,
+            "vacancies_processed": len(filtered_salaries),
+            "average_salary": average_salary,
+        }
+
     return salary_info
 
 
@@ -73,14 +71,24 @@ def make_table(data):
         ]
     )
     for key, value in data.items():
-        table_data.append([key] + [values for values in value.values()])
+        table_data.append(
+            [
+                key,
+                value["vacancies_found"],
+                value["vacancies_processed"],
+                value["average_salary"],
+            ]
+        )
     return table_data
 
 
 if __name__ == "__main__":
     sites = [HeadHunter(), SuperJob()]
     for site in sites:
-        salary_info = get_salary_info(site, languages)
+        try:
+            salary_info = get_salary_info(site, settings.LANGUAGES)
+        except requests.exceptions.ConnectionError as err:
+            exit(err)
         table = AsciiTable(make_table(salary_info))
         table.title = site.title
         print(table.table)
