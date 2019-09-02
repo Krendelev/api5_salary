@@ -1,5 +1,7 @@
 import itertools
+import logging
 import statistics
+import sys
 import requests
 from terminaltables import AsciiTable
 
@@ -20,7 +22,7 @@ def get_vacancies(url, headers, payload, records):
     for page in itertools.count():
         payload.update({"page": page})
         response = requests.get(url, headers=headers, params=payload)
-        # HeadHunter отвечает 400 при попытке получить более 2000 записей
+        # HeadHunter responses 400 to attempt to get more than 2000 records
         if not response.ok and response.status_code != 400:
             response.raise_for_status()
         current_records = response.json()[records] if response.ok else None
@@ -33,9 +35,9 @@ def get_salary_info(site, languages):
     salary_info = {}
     for language in languages:
         payload = site.make_payload(language)
-        vacancies_count = requests.get(
-            site.url, headers=site.headers, params=payload
-        ).json()[site.total]
+        response = requests.get(site.url, headers=site.headers, params=payload)
+        response.raise_for_status()
+        vacancies_count = response.json()[site.total]
 
         records = site.record_name
         vacancies = get_vacancies(site.url, site.headers, payload, records)
@@ -83,12 +85,14 @@ def make_table(data):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(filename="main.log", format="%(asctime)s - %(message)s")
     sites = [HeadHunter(), SuperJob()]
     for site in sites:
         try:
             salary_info = get_salary_info(site, settings.LANGUAGES)
-        except requests.exceptions.ConnectionError as err:
-            exit(err)
+        except requests.exceptions.RequestException as e:
+            logging.exception("Exception occurred")
+            sys.exit(1)
         table = AsciiTable(make_table(salary_info))
         table.title = site.title
         print(table.table)
