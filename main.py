@@ -72,13 +72,13 @@ def make_table(data):
             "Средняя зарплата",
         ]
     )
-    for key, value in data.items():
+    for language, vacancies in data.items():
         table_data.append(
             [
-                key,
-                value["vacancies_found"],
-                value["vacancies_processed"],
-                value["average_salary"],
+                language,
+                vacancies["vacancies_found"],
+                vacancies["vacancies_processed"],
+                vacancies["average_salary"],
             ]
         )
     return table_data
