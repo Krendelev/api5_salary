@@ -20,9 +20,9 @@ def predict_rub_salary(salary_from, salary_to):
 
 def get_vacancies(url, headers, payload, records):
     for page in itertools.count():
-        payload.update({"page": page})
-        response = requests.get(url, headers=headers, params=payload)
-        # HeadHunter responses 400 to attempt to get more than 2000 records
+        params = {**payload, "page": page}
+        response = requests.get(url, headers=headers, params=params)
+        # HeadHunter responds 400 to attempt to get more than 2000 records
         if not response.ok and response.status_code != 400:
             response.raise_for_status()
         current_records = response.json()[records] if response.ok else None
@@ -86,8 +86,8 @@ def make_table(data):
 
 if __name__ == "__main__":
     logging.basicConfig(filename="main.log", format="%(asctime)s - %(message)s")
-    sites = [HeadHunter(), SuperJob()]
-    for site in sites:
+
+    for site in (HeadHunter(), SuperJob()):
         try:
             salary_info = get_salary_info(site, settings.LANGUAGES)
         except requests.exceptions.RequestException as e:
